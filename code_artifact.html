@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>田園 歌詞カード並べ替えゲーム</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    
+    /* 雲のゆっくりした横移動アニメーション */
+    @keyframes floatCloud {
+      0% { transform: translateX(-150px); }
+      100% { transform: translateX(calc(100vw + 150px)); }
+    }
+    .animate-cloud-slow {
+      animation: floatCloud 45s linear infinite;
+    }
+    .animate-cloud-fast {
+      animation: floatCloud 30s linear infinite;
+      animation-delay: -15s;
+    }
+
+    .card-item {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      touch-action: manipulation;
+    }
+    .card-item.selected {
+      border-color: #059669 !important; /* emerald-600 */
+      background-color: #ecfdf5 !important; /* emerald-50 */
+      box-shadow: 0 0 0 2px #059669;
+      transform: translateY(-2px);
+    }
+    .card-item.dragging {
+      opacity: 0.4;
+      transform: scale(0.98);
+    }
+  </style>
+</head>
+<body class="min-h-screen text-gray-800 flex flex-col items-center justify-center p-4 relative overflow-x-hidden selection:bg-emerald-100">
+
+  <!-- 田園風景の背景イラスト（CSS & SVG） -->
+  <div class="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+    <!-- 青空から夕映えのグラデーション -->
+    <div class="absolute inset-0 bg-gradient-to-b from-sky-400 via-sky-200 to-amber-100"></div>
+
+    <!-- ぽっかり浮かぶ雲 -->
+    <div class="absolute top-12 left-0 animate-cloud-slow opacity-80">
+      <svg width="120" height="45" viewBox="0 0 120 45" fill="white">
+        <path d="M20,40 Q10,40 10,30 Q10,20 25,20 Q35,10 50,15 Q65,5 80,18 Q95,15 100,28 Q110,30 105,40 Z"/>
+      </svg>
+    </div>
+    <div class="absolute top-28 left-0 animate-cloud-fast opacity-60">
+      <svg width="160" height="55" viewBox="0 0 160 55" fill="white">
+        <path d="M25,50 Q10,50 12,38 Q10,25 30,25 Q42,12 62,18 Q80,6 100,22 Q120,18 130,35 Q145,38 140,50 Z"/>
+      </svg>
+    </div>
+
+    <!-- 遠景の山と丘・田んぼの層（自然なレイヤー） -->
+    <div class="absolute bottom-0 inset-x-0 w-full leading-none">
+      <svg class="w-full h-44 sm:h-64 object-cover" viewBox="0 0 1440 320" preserveAspectRatio="none">
+        <!-- 遠くの山並み -->
+        <path fill="#86efac" fill-opacity="0.4" d="M0,192L60,181.3C120,171,240,149,360,165.3C480,181,600,235,720,224C840,213,960,139,1080,128C1200,117,1320,171,1380,197.3L1440,224L1440,320L1380,320C1320,320,1200,320,1080,320C960,320,840,320,720,320C600,320,480,320,360,320C240,320,120,320,60,320L0,320Z"></path>
+        <!-- なだらかな丘 -->
+        <path fill="#4ade80" fill-opacity="0.6" d="M0,224L80,240C160,256,320,288,480,272C640,256,800,192,960,192C1120,192,1280,256,1360,288L1440,320L1440,320L1360,320C1280,320,1120,320,960,320C800,320,640,320,480,320C320,320,160,320,80,320L0,320Z"></path>
+        <!-- 手前の田畑・あぜ道 -->
+        <path fill="#15803d" fill-opacity="0.85" d="M0,288L120,277.3C240,267,480,245,720,256C960,267,1200,309,1320,330.7L1440,352L1440,384L1320,384C1200,384,960,384,720,384C480,384,240,384,120,384L0,384Z"></path>
+      </svg>
+    </div>
+  </div>
+
+  <!-- メインコンテナ（ガラスモフィズムで背景を魅せる） -->
+  <div class="w-full max-w-xl bg-white/90 backdrop-blur-md rounded-2xl shadow-xl border border-white/60 p-5 sm:p-7 flex flex-col gap-5 my-4">
+    
+    <!-- ヘッダー -->
+    <div class="text-center">
+      <div class="inline-block px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-semibold rounded-full mb-2">
+        歌詞並べ替えパズル
+      </div>
+      <h1 class="text-2xl sm:text-3xl font-extrabold text-emerald-950 tracking-tight">田園 カード並べ替え</h1>
+      <p class="text-xs sm:text-sm text-emerald-800/80 mt-1">
+        8枚のカードを正しい順番（1〜8）に並べ替えてください。<br>
+        <span class="text-xs text-gray-500">※カードを2枚選択するか、ドラッグ＆ドロップで移動できます。</span>
+      </p>
+    </div>
+
+    <!-- メッセージ表示エリア -->
+    <div id="message-box" class="bg-emerald-50/80 border border-emerald-200/80 rounded-xl p-3 text-center text-sm font-medium text-emerald-900 min-h-[46px] flex items-center justify-center transition-all">
+      カードを並べ替えてストーリーを完成させましょう。
+    </div>
+
+    <!-- カウンター -->
+    <div class="flex justify-between items-center text-xs sm:text-sm text-emerald-900/70 px-1 font-medium">
+      <div>手数: <span id="move-count" class="font-bold text-emerald-900 text-base">0</span> 回</div>
+    </div>
+
+    <!-- カードスロット一覧 -->
+    <div id="card-container" class="flex flex-col gap-2.5">
+      <!-- カードはJSで動的に生成されます -->
+    </div>
+
+    <!-- 操作ボタン -->
+    <div class="flex justify-between items-center gap-3 pt-2">
+      <button id="reset-btn" class="px-4 py-2.5 text-sm font-semibold text-emerald-800 bg-emerald-100/80 hover:bg-emerald-200/80 active:bg-emerald-300/80 rounded-xl transition-colors flex items-center gap-1.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        シャッフル
+      </button>
+      <button id="check-btn" class="flex-1 px-6 py-2.5 text-base font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-xl shadow-md shadow-emerald-600/20 transition-all transform active:scale-[0.99]">
+        答え合わせ
+      </button>
+    </div>
+
+  </div>
+
+  <!-- クリアモーダル -->
+  <div id="clear-modal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-white/95 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center flex flex-col items-center gap-4 shadow-2xl border border-white/80">
+      <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-3xl font-bold shadow-inner">
+        ✓
+      </div>
+      <h2 class="text-2xl font-extrabold text-gray-900">完成おめでとう！</h2>
+      <p class="text-sm text-gray-600 leading-relaxed">
+        見事に正しい順番に並び替えることができました！
+      </p>
+
+      <div class="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3 w-full text-xs text-emerald-900 flex justify-around font-medium">
+        <div>総手数: <span id="final-moves" class="font-bold text-base text-emerald-950">0</span> 回</div>
+      </div>
+
+      <button id="restart-btn" class="w-full py-3 text-base font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md shadow-emerald-600/20 transition-all">
+        もう一度遊ぶ
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // 8枚のカード正解データ（田園 歌詞）
+    const CORRECT_CARDS = [
+      { id: 1, text: "石コロけとばし 夕陽に泣いた僕" },
+      { id: 2, text: "夜空見上げて 星に祈ってた君" },
+      { id: 3, text: "アブラにまみれて 黙り込んだあいつ" },
+      { id: 4, text: "仕事ほっぽらかして ほおづえつくあの娘" },
+      { id: 5, text: "ひだまりのなか がむしゃらに走る僕" },
+      { id: 6, text: "そろばんはじいて 頭かかえてた君" },
+      { id: 7, text: "からのミルクビンに タンポポさすあいつ" },
+      { id: 8, text: "道をはずれちゃって とほうに暮れるあの娘" }
+    ];
+
+    let currentCards = [];
+    let selectedIndex = null;
+    let moveCount = 0;
+    let dragSrcIndex = null;
+
+    // ゲームの初期化
+    function initGame() {
+      // 完全に正解の並びにならないようシャッフル
+      do {
+        currentCards = [...CORRECT_CARDS].sort(() => Math.random() - 0.5);
+      } while (isCorrectOrder());
+
+      selectedIndex = null;
+      moveCount = 0;
+      document.getElementById('move-count').textContent = '0';
+      
+      resetMessageBox();
+      renderCards();
+    }
+
+    function resetMessageBox() {
+      const messageBox = document.getElementById('message-box');
+      messageBox.textContent = 'カードを並べ替えてストーリーを完成させましょう。';
+      messageBox.className = 'bg-emerald-50/80 border border-emerald-200/80 rounded-xl p-3 text-center text-sm font-medium text-emerald-900 min-h-[46px] flex items-center justify-center transition-all';
+    }
+
+    // 全て正解かどうかチェック
+    function isCorrectOrder() {
+      return currentCards.every((card, idx) => card.id === idx + 1);
+    }
+
+    // 正解数をカウント
+    function getCorrectCount() {
+      return currentCards.reduce((acc, card, idx) => {
+        return acc + (card.id === idx + 1 ? 1 : 0);
+      }, 0);
+    }
+
+    // カード一覧の描画
+    function renderCards() {
+      const container = document.getElementById('card-container');
+      container.innerHTML = '';
+
+      currentCards.forEach((card, index) => {
+        const slotNum = index + 1;
+        const cardEl = document.createElement('div');
+        
+        cardEl.className = `card-item p-3 sm:p-3.5 bg-white/95 border border-emerald-900/10 rounded-xl flex items-center justify-between cursor-pointer select-none shadow-sm hover:shadow-md hover:border-emerald-500/40 ${
+          selectedIndex === index ? 'selected' : ''
+        }`;
+        
+        cardEl.draggable = true;
+        cardEl.dataset.index = index;
+
+        cardEl.innerHTML = `
+          <div class="flex items-center gap-3 w-full pointer-events-none">
+            <span class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center flex-shrink-0">
+              ${slotNum}
+            </span>
+            <span class="font-semibold text-sm sm:text-base text-gray-800 flex-grow">
+              ${card.text}
+            </span>
+            <span class="text-xs text-emerald-600/40 font-normal hidden sm:inline">
+              ⋮⋮
+            </span>
+          </div>
+        `;
+
+        // タップ/クリックイベント
+        cardEl.addEventListener('click', () => handleCardClick(index));
+
+        // ドラッグ＆ドロップイベント
+        cardEl.addEventListener('dragstart', (e) => {
+          dragSrcIndex = index;
+          cardEl.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+        });
+
+        cardEl.addEventListener('dragend', () => {
+          cardEl.classList.remove('dragging');
+        });
+
+        cardEl.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+        });
+
+        cardEl.addEventListener('drop', (e) => {
+          e.preventDefault();
+          if (dragSrcIndex !== null && dragSrcIndex !== index) {
+            swapCards(dragSrcIndex, index);
+            dragSrcIndex = null;
+          }
+        });
+
+        container.appendChild(cardEl);
+      });
+    }
+
+    // クリックによるカード選択・交換
+    function handleCardClick(index) {
+      if (selectedIndex === null) {
+        selectedIndex = index;
+        renderCards();
+      } else if (selectedIndex === index) {
+        selectedIndex = null;
+        renderCards();
+      } else {
+        swapCards(selectedIndex, index);
+        selectedIndex = null;
+      }
+    }
+
+    // カードの入れ替え
+    function swapCards(idx1, idx2) {
+      const temp = currentCards[idx1];
+      currentCards[idx1] = currentCards[idx2];
+      currentCards[idx2] = temp;
+
+      moveCount++;
+      document.getElementById('move-count').textContent = moveCount;
+
+      resetMessageBox();
+      renderCards();
+    }
+
+    // 答え合わせ判定
+    function checkAnswer() {
+      const messageBox = document.getElementById('message-box');
+
+      if (isCorrectOrder()) {
+        document.getElementById('final-moves').textContent = moveCount;
+        document.getElementById('clear-modal').classList.remove('hidden');
+      } else {
+        const correctCount = getCorrectCount();
+        messageBox.textContent = `現在 ${correctCount} / 8 枚正解しています！`;
+        messageBox.className = 'bg-amber-50/90 border border-amber-200 text-amber-900 rounded-xl p-3 text-center text-sm font-semibold min-h-[46px] flex items-center justify-center';
+      }
+    }
+
+    // イベントリスナー設定
+    document.getElementById('check-btn').addEventListener('click', checkAnswer);
+    document.getElementById('reset-btn').addEventListener('click', initGame);
+    document.getElementById('restart-btn').addEventListener('click', () => {
+      document.getElementById('clear-modal').classList.add('hidden');
+      initGame();
+    });
+
+    // 初回起動
+    window.onload = initGame;
+  </script>
+</body>
+</html>
